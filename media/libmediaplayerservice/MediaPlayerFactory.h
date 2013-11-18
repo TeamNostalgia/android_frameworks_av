@@ -49,6 +49,12 @@ class MediaPlayerFactory {
     static status_t registerFactory(IFactory* factory,
                                     player_type type);
     static void unregisterFactory(player_type type);
+    static player_type getOldPlayerType(const sp<IMediaPlayer>& client,
+                                     const char* url);
+    static player_type getOldPlayerType(const sp<IMediaPlayer>& client,
+                                     int fd,
+                                     int64_t offset,
+                                     int64_t length);
     static player_type getPlayerType(const sp<IMediaPlayer>& client,
                                      const char* url);
     static player_type getPlayerType(const sp<IMediaPlayer>& client,

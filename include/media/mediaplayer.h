@@ -126,6 +126,13 @@ enum media_info_type {
 
     //9xx
     MEDIA_INFO_TIMED_TEXT_ERROR = 900,
+
+    //amlogic extend warning message type,just for notify,never force to exit player.
+    MEDIA_INFO_AMLOGIC_BASE = 8000,
+    MEDIA_INFO_AMLOGIC_VIDEO_NOT_SUPPORT=MEDIA_INFO_AMLOGIC_BASE+1,
+    MEDIA_INFO_AMLOGIC_AUDIO_NOT_SUPPORT = MEDIA_INFO_AMLOGIC_BASE+2,
+    MEDIA_INFO_AMLOGIC_NO_VIDEO = MEDIA_INFO_AMLOGIC_BASE+3,
+    MEDIA_INFO_AMLOGIC_NO_AUDIO = MEDIA_INFO_AMLOGIC_BASE+4,
 };
 
 
@@ -157,6 +164,43 @@ enum media_parameter_keys {
     // Playback rate expressed in permille (1000 is normal speed), saved as int32_t, with negative
     // values used for rewinding or reverse playback.
     KEY_PARAMETER_PLAYBACK_RATE_PERMILLE = 1300,                // set only
+
+
+    //AML Video INFO string,set only
+    KEY_PARAMETER_AML_VIDEO_POSITION_INFO = 2000,
+
+    //PLAYER TYPE STRING
+    KEY_PARAMETER_AML_PLAYER_TYPE_STR  =2001,
+    //PLAYER VIDEO  OUT/TYPE
+    //public static final int VIDEO_OUT_SOFT_RENDER =   0;
+    //public static final int VIDEO_OUT_HARDWARE    =   1;
+    KEY_PARAMETER_AML_PLAYER_VIDEO_OUT_TYPE = 2002,
+
+    //amlogic private API,set only.
+    //switch sound track
+    KEY_PARAMETER_AML_PLAYER_SWITCH_SOUND_TRACK = 2003,//string,refer to lmono,rmono,stereo,set only
+    KEY_PARAMETER_AML_PLAYER_SWITCH_AUDIO_TRACK = 2004,//string,refer to audio track index,set only
+    KEY_PARAMETER_AML_PLAYER_TRICKPLAY_FORWARD = 2005,//string,refer to forward:speed
+    KEY_PARAMETER_AML_PLAYER_TRICKPLAY_BACKWARD = 2006,//string,refer to  backward:speed
+    KEY_PARAMETER_AML_PLAYER_FORCE_HARD_DECODE = 2007,//string,refer to mp3,etc.
+    KEY_PARAMETER_AML_PLAYER_FORCE_SOFT_DECODE = 2008,//string,refer to mp3,etc.
+
+
+
+    // hardware decoder buffer infos,get only
+    KEY_PARAMETER_AML_PLAYER_HWBUFFER_STATE = 3001, //string,refer to stream buffer info
+
+
+   /*...*/
+   KEY_PARAMETER_AML_PLAYER_RESET_BUFFER=8000,//top level seek..player need to reset & clearbuffers
+
+   KEY_PARAMETER_AML_PLAYER_FREERUN_MODE = 8002,	    //play ASAP...
+   KEY_PARAMETER_AML_PLAYER_ENABLE_OSDVIDEO = 8003,	    //play enable osd video for this player....
+};
+
+enum video_out_type {
+    VIDEO_OUT_SOFT_RENDER = 0,
+    VIDEO_OUT_HARDWARE = 1,
 };
 
 // Keep INVOKE_ID_* in sync with MediaPlayer.java.

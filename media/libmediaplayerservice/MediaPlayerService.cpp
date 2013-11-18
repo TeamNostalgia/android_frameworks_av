@@ -71,6 +71,10 @@
 #include "TestPlayerStub.h"
 #include "StagefrightPlayer.h"
 #include "nuplayer/NuPlayerDriver.h"
+#ifdef BUILD_WITH_AMLOGIC_PLAYER
+#include "AmlogicPlayer.h"
+#endif
+#include "AmSuperPlayer.h"
 
 #include <OMX.h>
 
@@ -222,7 +226,7 @@ MediaPlayerService::MediaPlayerService()
     // speaker is on by default
     mBatteryAudio.deviceOn[SPEAKER] = 1;
 
-    MediaPlayerFactory::registerBuiltinFactories();
+    //MediaPlayerFactory::registerBuiltinFactories();
 }
 
 MediaPlayerService::~MediaPlayerService()
@@ -591,7 +595,7 @@ sp<MediaPlayerBase> MediaPlayerService::Client::setDataSource_pre(
         return p;
     }
 
-    if (!p->hardwareOutput()) {
+    if (!p->hardwareOutput() || playerType == AMSUPER_PLAYER) {
         mAudioOutput = new AudioOutput(mAudioSessionId);
         static_cast<MediaPlayerInterface*>(p.get())->setAudioSink(mAudioOutput);
     }
@@ -707,7 +711,7 @@ status_t MediaPlayerService::Client::setDataSource(int fd, int64_t offset, int64
 status_t MediaPlayerService::Client::setDataSource(
         const sp<IStreamSource> &source) {
     // create the right type of player
-    player_type playerType = MediaPlayerFactory::getPlayerType(this, source);
+    player_type playerType = AMLOGIC_PLAYER;
     sp<MediaPlayerBase> p = setDataSource_pre(playerType);
     if (p == NULL) {
         return NO_INIT;
@@ -1028,6 +1032,15 @@ status_t MediaPlayerService::Client::getParameter(int key, Parcel *reply) {
     ALOGV("[%d] getParameter(%d)", mConnId, key);
     sp<MediaPlayerBase> p = getPlayer();
     if (p == 0) return UNKNOWN_ERROR;
+    if (key==KEY_PARAMETER_AML_PLAYER_TYPE_STR && p->playerType()!=AMSUPER_PLAYER) {
+        /*return player name*/
+        reply->writeString16(String16(AmSuperPlayer::PlayerType2Str(p->playerType())));
+        return 0;
+    }
+    if (key==KEY_PARAMETER_AML_PLAYER_VIDEO_OUT_TYPE && p->playerType()!=AMSUPER_PLAYER) {
+        reply->writeInt32(VIDEO_OUT_SOFT_RENDER);/*other all software*/
+        return 0;
+    }
     return p->getParameter(key, reply);
 }
 
@@ -1212,7 +1225,7 @@ sp<IMemory> MediaPlayerService::decode(const char* url, uint32_t *pSampleRate, i
     }
 
     player_type playerType =
-        MediaPlayerFactory::getPlayerType(NULL /* client */, url);
+        MediaPlayerFactory::getOldPlayerType(NULL /* client */, url);
     ALOGV("player type = %d", playerType);
 
     // create the right type of player
@@ -1259,7 +1272,7 @@ sp<IMemory> MediaPlayerService::decode(int fd, int64_t offset, int64_t length, u
     sp<MemoryBase> mem;
     sp<MediaPlayerBase> player;
 
-    player_type playerType = MediaPlayerFactory::getPlayerType(NULL /* client */,
+    player_type playerType = MediaPlayerFactory::getOldPlayerType(NULL /* client */,
                                                                fd,
                                                                offset,
                                                                length);
@@ -1645,21 +1658,53 @@ void MediaPlayerService::AudioOutput::setNextOutput(const sp<AudioOutput>& nextO
 
 
 void MediaPlayerService::AudioOutput::switchToNextOutput() {
-    ALOGV("switchToNextOutput");
-    if (mNextOutput != NULL) {
-        if (mCallbackData != NULL) {
+    ALOGI("\n\n--------------switchToNextOutput_begin-------------");
+    if (mNextOutput != NULL)
+    {
+	ALOGI("MEMTRACE:mem->mTrack_addr=0x%x  mCallbackData_addr=0x%x   mCallbackData_next=0x%x %s %d --AudioOutput\n",
+	    (unsigned)mTrack,(unsigned)(mCallbackData),(unsigned)(mNextOutput->mCallbackData),__FUNCTION__,__LINE__);
+	if(mTrack!=NULL){
+        if (mCallbackData != NULL)
             mCallbackData->beginTrackSwitch();
+
+	    delete mNextOutput->mCallbackData;
+            mNextOutput->mCallbackData  = mCallbackData;
+            mNextOutput->mRecycledTrack = mTrack;
+            mNextOutput->mSampleRateHz  = mSampleRateHz;
+            mNextOutput->mMsecsPerFrame = mMsecsPerFrame;
+            mNextOutput->mBytesWritten  = mBytesWritten;
+            mNextOutput->mFlags = mFlags;
+            mTrack = NULL;
+	    mCallbackData = NULL;
+        }else{
+            //NOTE!!-->here we release <mCallbackData> and <mRecycledTrack>
+            // when current player is STAGEFRIGHT_player ,mTrack !=NULL, whether mTrack should be released
+            // depend on next track and process this in function <MediaPlayerService::AudioOutput::open> ;
+            // when current player is AMLOGIC_player ,  for AMLOGIC_player has its own
+            // audiotrack procedure located in file <android-out.cpp>, which not interacted with STAGEFRIGHT_player's
+            //audiotrack process, when AMLOGIC_PLAYER extecuted to this place,mTrack ==NULL,and <mRecycledTrack>
+            // has no coresponding code releasing it;
+            // so when STAGEFRIGHT_player was called last time and  AMLOGIC_player was called this time, here should
+            // we relase <mRecycledTrack>,otherise, memory leaky will occur;
+	    if (mCallbackData != NULL) {
+                mCallbackData->setOutput(NULL);
+                mCallbackData->endTrackSwitch();
+		ALOGI("MEMTRACE:mem->mCallbackData_del  =0x%x  %s %d --AudioOutput\n",(unsigned)mCallbackData,__FUNCTION__,__LINE__);
+            }
+
+	    if(mRecycledTrack!=NULL){
+	        mRecycledTrack->stop();//mRecycledTrack->flush();
+		ALOGI("MEMTRACE:mem->mRecycledTrack_del =0x%x  %s %d --AudioOutput\n",(unsigned)mRecycledTrack,__FUNCTION__,__LINE__);
+            }
+	    delete mRecycledTrack;
+            mRecycledTrack = NULL;
+            delete mCallbackData;
+            mCallbackData = NULL;
         }
-        delete mNextOutput->mCallbackData;
-        mNextOutput->mCallbackData = mCallbackData;
-        mCallbackData = NULL;
-        mNextOutput->mRecycledTrack = mTrack;
-        mTrack = NULL;
-        mNextOutput->mSampleRateHz = mSampleRateHz;
-        mNextOutput->mMsecsPerFrame = mMsecsPerFrame;
-        mNextOutput->mBytesWritten = mBytesWritten;
-        mNextOutput->mFlags = mFlags;
+    }else{
+        ALOGI("MEMTRACE:mNextOutput is NULL %s %d --AudioOutput\n",__FUNCTION__,__LINE__);
     }
+    ALOGI("--------------switchToNextOutput_end-------------");
 }
 
 ssize_t MediaPlayerService::AudioOutput::write(const void* buffer, size_t size)

@@ -32,11 +32,32 @@
 #include "nuplayer/NuPlayerDriver.h"
 #include <dlfcn.h>
 
+#ifdef BUILD_WITH_AMLOGIC_PLAYER
+#include "AmlogicPlayer.h"
+#endif
+#include "AmSuperPlayer.h"
+
 namespace android {
 
 Mutex MediaPlayerFactory::sLock;
 MediaPlayerFactory::tFactoryMap MediaPlayerFactory::sFactoryMap;
 bool MediaPlayerFactory::sInitComplete = false;
+
+typedef struct {
+    const char *extension;
+    const player_type playertype;
+} extmap;
+extmap FILE_EXTS [] =  {
+        {".mid", SONIVOX_PLAYER},
+        {".midi", SONIVOX_PLAYER},
+        {".smf", SONIVOX_PLAYER},
+        {".xmf", SONIVOX_PLAYER},
+        {".imy", SONIVOX_PLAYER},
+        {".rtttl", SONIVOX_PLAYER},
+        {".rtx", SONIVOX_PLAYER},
+        {".ota", SONIVOX_PLAYER},
+	{".ogg", STAGEFRIGHT_PLAYER},
+};
 
 status_t MediaPlayerFactory::registerFactory_l(IFactory* factory,
                                                player_type type) {
@@ -61,7 +82,31 @@ status_t MediaPlayerFactory::registerFactory_l(IFactory* factory,
     return OK;
 }
 
+static  bool check_prop_enable(const char* str)
+{
+	char value[PROPERTY_VALUE_MAX];
+	if(property_get(str, value, NULL)>0)
+	{
+
+		if ((!strcmp(value, "1") || !strcmp(value, "true")))
+		{
+			ALOGV("%s is enabled\n",str);
+			return true;
+		}
+	}
+	ALOGV("%s is disabled\n",str);
+	return false;
+}
+
+static player_type getOldDefaultPlayerType() {
+    return STAGEFRIGHT_PLAYER;
+}
+
 player_type MediaPlayerFactory::getDefaultPlayerType() {
+#ifdef BUILD_WITH_AMLOGIC_PLAYER
+	if (check_prop_enable("media.amsuperplayer.enable"))
+		return AMSUPER_PLAYER;
+#endif
     char value[PROPERTY_VALUE_MAX];
     if (property_get("media.stagefright.use-nuplayer", value, NULL)
             && (!strcmp("1", value) || !strcasecmp("true", value))) {
@@ -69,6 +114,59 @@ player_type MediaPlayerFactory::getDefaultPlayerType() {
     }
 
     return STAGEFRIGHT_PLAYER;
+}
+
+player_type MediaPlayerFactory::getOldPlayerType(const sp<IMediaPlayer>& client, int fd, int64_t offset, int64_t length)
+{
+    char buf[20];
+    lseek(fd, offset, SEEK_SET);
+    read(fd, buf, sizeof(buf));
+    lseek(fd, offset, SEEK_SET);
+
+    long ident = *((long*)buf);
+
+    // Ogg vorbis?
+    if (ident == 0x5367674f) // 'OggS'
+        return STAGEFRIGHT_PLAYER;
+
+    // Some kind of MIDI?
+    EAS_DATA_HANDLE easdata;
+    if (EAS_Init(&easdata) == EAS_SUCCESS) {
+        EAS_FILE locator;
+        locator.path = NULL;
+        locator.fd = fd;
+        locator.offset = offset;
+        locator.length = length;
+        EAS_HANDLE  eashandle;
+        if (EAS_OpenFile(easdata, &locator, &eashandle) == EAS_SUCCESS) {
+            EAS_CloseFile(easdata, eashandle);
+            EAS_Shutdown(easdata);
+            return SONIVOX_PLAYER;
+        }
+        EAS_Shutdown(easdata);
+    }
+
+    return getOldDefaultPlayerType();
+}
+
+player_type MediaPlayerFactory::getOldPlayerType(const sp<IMediaPlayer>& client, const char* url)
+{
+    if (TestPlayerStub::canBeUsed(url)) {
+        return TEST_PLAYER;
+    }
+    // use MidiFile for MIDI extensions
+    int lenURL = strlen(url);
+    for (int i = 0; i < NELEM(FILE_EXTS); ++i) {
+        int len = strlen(FILE_EXTS[i].extension);
+        int start = lenURL - len;
+        if (start > 0) {
+            if (!strncasecmp(url + start, FILE_EXTS[i].extension, len)) {
+                return FILE_EXTS[i].playertype;
+            }
+        }
+    }
+
+    return getOldDefaultPlayerType();
 }
 
 status_t MediaPlayerFactory::registerFactory(IFactory* factory,
@@ -82,83 +180,125 @@ void MediaPlayerFactory::unregisterFactory(player_type type) {
     sFactoryMap.removeItem(type);
 }
 
-#define GET_PLAYER_TYPE_IMPL(a...)                      \
-    Mutex::Autolock lock_(&sLock);                      \
-                                                        \
-    player_type ret = STAGEFRIGHT_PLAYER;               \
-    float bestScore = 0.0;                              \
-                                                        \
-    for (size_t i = 0; i < sFactoryMap.size(); ++i) {   \
-                                                        \
-        IFactory* v = sFactoryMap.valueAt(i);           \
-        float thisScore;                                \
-        CHECK(v != NULL);                               \
-        thisScore = v->scoreFactory(a, bestScore);      \
-        if (thisScore > bestScore) {                    \
-            ret = sFactoryMap.keyAt(i);                 \
-            bestScore = thisScore;                      \
-        }                                               \
-    }                                                   \
-                                                        \
-    if (0.0 == bestScore) {                             \
-        ret = getDefaultPlayerType();                   \
-    }                                                   \
-                                                        \
-    return ret;
-
 player_type MediaPlayerFactory::getPlayerType(const sp<IMediaPlayer>& client,
                                               const char* url) {
-    GET_PLAYER_TYPE_IMPL(client, url);
+    if (TestPlayerStub::canBeUsed(url)) {
+        return TEST_PLAYER;
+    }
+  if (!check_prop_enable("media.amsuperplayer.enable")) {/*if not used  hw decoder*/
+    if (!strncasecmp("http://", url, 7)
+            || !strncasecmp("https://", url, 8)) {
+        size_t len = strlen(url);
+        if (len >= 5 && !strcasecmp(".m3u8", &url[len - 5])) {
+            return NU_PLAYER;
+        }
+        if(len >= 4 && !strcasecmp(".mpd", &url[len - 4])){
+            return NU_PLAYER;
+        }
+        if (strstr(url,"m3u8")) {
+            return NU_PLAYER;
+        }
+    }
+
+    if (!strncasecmp("rtsp://", url, 7)) {
+        return NU_PLAYER;
+    }
+  }
+
+    // use MidiFile for MIDI extensions
+    int lenURL = strlen(url);
+    for (int i = 0; i < NELEM(FILE_EXTS); ++i) {
+        int len = strlen(FILE_EXTS[i].extension);
+        int start = lenURL - len;
+        if (start > 0) {
+            if (!strncasecmp(url + start, FILE_EXTS[i].extension, len)) {
+                return FILE_EXTS[i].playertype;
+            }
+        }
+    }
+
+    return getDefaultPlayerType();
 }
 
 player_type MediaPlayerFactory::getPlayerType(const sp<IMediaPlayer>& client,
                                               int fd,
                                               int64_t offset,
                                               int64_t length) {
-    GET_PLAYER_TYPE_IMPL(client, fd, offset, length);
-}
+    char buf[20];
+    lseek(fd, offset, SEEK_SET);
+    read(fd, buf, sizeof(buf));
+    lseek(fd, offset, SEEK_SET);
 
-player_type MediaPlayerFactory::getPlayerType(const sp<IMediaPlayer>& client,
-                                              const sp<IStreamSource> &source) {
-    GET_PLAYER_TYPE_IMPL(client, source);
-}
+    long ident = *((long*)buf);
 
-#undef GET_PLAYER_TYPE_IMPL
+    // Ogg vorbis?
+    if (ident == 0x5367674f) // 'OggS'
+        return STAGEFRIGHT_PLAYER;
+
+    // Some kind of MIDI?
+    EAS_DATA_HANDLE easdata;
+    if (EAS_Init(&easdata) == EAS_SUCCESS) {
+        EAS_FILE locator;
+        locator.path = NULL;
+        locator.fd = fd;
+        locator.offset = offset;
+        locator.length = length;
+        EAS_HANDLE  eashandle;
+        if (EAS_OpenFile(easdata, &locator, &eashandle) == EAS_SUCCESS) {
+            EAS_CloseFile(easdata, eashandle);
+            EAS_Shutdown(easdata);
+            return SONIVOX_PLAYER;
+        }
+        EAS_Shutdown(easdata);
+    }
+
+    return getDefaultPlayerType();
+}
 
 sp<MediaPlayerBase> MediaPlayerFactory::createPlayer(
         player_type playerType,
         void* cookie,
         notify_callback_f notifyFunc) {
     sp<MediaPlayerBase> p;
-    IFactory* factory;
-    status_t init_result;
-    Mutex::Autolock lock_(&sLock);
-
-    if (sFactoryMap.indexOfKey(playerType) < 0) {
-        ALOGE("Failed to create player object of type %d, no registered"
-              " factory", playerType);
-        return p;
+    switch (playerType) {
+        case SONIVOX_PLAYER:
+            ALOGV(" create MidiFile");
+            p = new MidiFile();
+            break;
+        case STAGEFRIGHT_PLAYER:
+            ALOGV(" create StagefrightPlayer");
+            p = new StagefrightPlayer;
+            break;
+        case NU_PLAYER:
+            ALOGV(" create NuPlayer");
+            p = new NuPlayerDriver;
+            break;
+	case AMLOGIC_PLAYER:
+			ALOGV("Create AmlogicPlayer");
+            p = new AmlogicPlayer();
+            break;
+	case AMSUPER_PLAYER:
+            ALOGV("Create AmSuperPlayer");
+            p = new AmSuperPlayer();
+            break;
+        case TEST_PLAYER:
+            ALOGV("Create Test Player stub");
+            p = new TestPlayerStub();
+            break;
+        default:
+            ALOGE("Unknown player type: %d", playerType);
+            return NULL;
     }
-
-    factory = sFactoryMap.valueFor(playerType);
-    CHECK(NULL != factory);
-    p = factory->createPlayer();
-
+    if (p != NULL) {
+        if (p->initCheck() == NO_ERROR) {
+            p->setNotifyCallback(cookie, notifyFunc);
+        } else {
+            p.clear();
+        }
+    }
     if (p == NULL) {
-        ALOGE("Failed to create player object of type %d, create failed",
-               playerType);
-        return p;
+        ALOGE("Failed to create player object");
     }
-
-    init_result = p->initCheck();
-    if (init_result == NO_ERROR) {
-        p->setNotifyCallback(cookie, notifyFunc);
-    } else {
-        ALOGE("Failed to create player object of type %d, initCheck failed"
-              " (res = %d)", playerType, init_result);
-        p.clear();
-    }
-
     return p;
 }
 
@@ -330,6 +470,7 @@ class TestPlayerFactory : public MediaPlayerFactory::IFactory {
 };
 
 void MediaPlayerFactory::registerBuiltinFactories() {
+#if 0
     Mutex::Autolock lock_(&sLock);
 
     if (sInitComplete)
@@ -363,6 +504,7 @@ void MediaPlayerFactory::registerBuiltinFactories() {
       }
     }
     sInitComplete = true;
+#endif
 }
 
 }  // namespace android

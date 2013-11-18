@@ -69,7 +69,7 @@ CameraSourceTimeLapse::CameraSourceTimeLapse(
         const sp<IGraphicBufferProducer>& surface,
         int64_t timeBetweenFrameCaptureUs)
       : CameraSource(camera, proxy, cameraId, clientName, clientUid,
-                videoSize, videoFrameRate, surface, true),
+                videoSize, videoFrameRate, surface, false),
       mTimeBetweenTimeLapseVideoFramesUs(1E6/videoFrameRate),
       mLastTimeLapseFrameRealTimestampUs(0),
       mSkipCurrentFrame(false) {

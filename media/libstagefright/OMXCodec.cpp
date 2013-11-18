@@ -216,6 +216,11 @@ static void InitOMXParams(T *params) {
 }
 
 static bool IsSoftwareCodec(const char *componentName) {
+    // Set Google's SW 264 decoder as HW type, to work around NetFlix's OMX component checking
+    if (!strncmp("OMX.google.h264.decoder", componentName, 23)) {
+        return false;
+    }
+
 #ifdef DOLBY_UDC
     if (!strncmp("OMX.dolby.", componentName, 10)) {
         return true;
@@ -3555,7 +3560,9 @@ bool OMXCodec::drainInputBuffer(BufferInfo *info) {
             memcpy((uint8_t *)info->mData + 4,
                    specific->mData, specific->mSize);
         } else {
-            CHECK(info->mSize >= specific->mSize);
+            //CHECK(info->mSize >= specific->mSize);
+            if(!(info->mSize >= specific->mSize))
+		return false;
             memcpy(info->mData, specific->mData, specific->mSize);
         }
 

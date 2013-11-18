@@ -51,8 +51,10 @@ enum player_type {
     // Test players are available only in the 'test' and 'eng' builds.
     // The shared library with the test player is passed passed as an
     // argument to the 'test:' url in the setDataSource call.
-    TEST_PLAYER = 5,
-    DASH_PLAYER = 6,
+    AMLOGIC_PLAYER = 5,
+    AMSUPER_PLAYER = 6,
+    TEST_PLAYER = 7,
+    DASH_PLAYER = 8,
 };
 
 
@@ -192,7 +194,7 @@ public:
         return INVALID_OPERATION;
     };
 
-    void        setNotifyCallback(
+    virtual void        setNotifyCallback(
             void* cookie, notify_callback_f notifyFunc) {
         Mutex::Autolock autoLock(mNotifyLock);
         mCookie = cookie; mNotify = notifyFunc;

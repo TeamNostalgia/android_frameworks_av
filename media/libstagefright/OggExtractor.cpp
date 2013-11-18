@@ -124,6 +124,7 @@ private:
     void parseFileMetaData();
 
     status_t findPrevGranulePosition(off64_t pageOffset, uint64_t *granulePos);
+    uint64_t findLastGranule(void);
 
     void buildTableOfContents();
 
@@ -307,6 +308,23 @@ status_t MyVorbisExtractor::findPrevGranulePosition(
             return OK;
         }
     }
+}
+
+uint64_t MyVorbisExtractor::findLastGranule(void) {
+		Page prevPage, curPage;
+		off_t prevPageOffset;
+		for ( prevPageOffset = 0; ; )
+		{
+			ssize_t n = readPage(prevPageOffset, &curPage);
+			if (n <= 0)
+			{
+				break;
+
+			} else
+				prevPage = curPage;
+			prevPageOffset += n;
+		}
+		return prevPage.mGranulePosition;
 }
 
 status_t MyVorbisExtractor::seekToTime(int64_t timeUs) {
@@ -729,10 +747,20 @@ status_t MyVorbisExtractor::verifyHeader(
 
             off64_t size;
             if (mSource->getSize(&size) == OK) {
-                uint64_t bps = approxBitrate();
-                if (bps != 0) {
-                    mMeta->setInt64(kKeyDuration, size * 8000000ll / bps);
-                }
+                   uint64_t bps = approxBitrate();
+		     if(0 != bps && bps < 10000000)
+		     {
+				mMeta->setInt64(kKeyDuration, size * 8000000ll / bps);
+		     } else
+		     {
+				uint64_t lastGranule, tDuration;
+				lastGranule= findLastGranule();
+				tDuration = lastGranule*1000000/mVi.rate;
+				mMeta->setInt64(kKeyDuration, tDuration);
+				bps = size * 8000000ll / tDuration;
+				mMeta->setInt64(kKeyBitRate, size * 8000000ll / tDuration);
+				mVi.bitrate_nominal = bps;
+		      }
             }
             break;
         }

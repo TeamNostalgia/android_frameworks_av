@@ -1,0 +1,49 @@
+diff a/services/camera/libcameraservice/CameraService.cpp b/services/camera/libcameraservice/CameraService.cpp	(rejected hunks)
+@@ -21,6 +21,7 @@
+ #include <stdio.h>
+ #include <sys/types.h>
+ #include <pthread.h>
++#include <fcntl.h>
+ 
+ #include <binder/AppOpsManager.h>
+ #include <binder/IPCThreadState.h>
+@@ -83,6 +84,30 @@ static void camera_device_status_change(
+ 
+ // ----------------------------------------------------------------------------
+ 
++#define AML_MIRROR_CAMERA_FILE_PATH "/sys/class/vm/mirror"
++static void amlCameraMirror(int cameraId)
++{
++    char buffer[16];
++    int fd;
++    int mirror;
++    char value[PROPERTY_VALUE_MAX];
++    
++    property_get("ro.camera.orientation.front", value, "0");
++    
++    if (strcmp(value, "180") == 0)
++	mirror = 2;
++    else
++	mirror = 0;
++
++    if (access(AML_MIRROR_CAMERA_FILE_PATH, W_OK) == 0) {
++	snprintf(buffer, sizeof(buffer), "%d", mirror);
++
++	fd = open(AML_MIRROR_CAMERA_FILE_PATH, O_WRONLY);
++	write(fd, buffer, strlen(buffer));
++	close(fd);
++    }
++}
++
+ // This is ugly and only safe if we never re-create the CameraService, but
+ // should be ok for now.
+ static CameraService *gCameraService;
+@@ -318,6 +349,8 @@ bool CameraService::canConnectUnsafe(int cameraId,
+     String8 clientName8(clientPackageName);
+     int callingPid = getCallingPid();
+ 
++    amlCameraMirror(cameraId);
++
+     if (mClient[cameraId] != 0) {
+         client = mClient[cameraId].promote();
+         if (client != 0) {

@@ -167,6 +167,8 @@ enum {
 
     kKeyPssh              = 'pssh',  // raw data
     kKeyTunnelException   = 'Ntnl', // not tunnel
+
+    kKeyAudioProfile      = 'aprf',  // int32_t
 };
 
 enum {

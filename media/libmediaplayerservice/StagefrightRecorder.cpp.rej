@@ -1,0 +1,10 @@
+diff a/media/libmediaplayerservice/StagefrightRecorder.cpp b/media/libmediaplayerservice/StagefrightRecorder.cpp	(rejected hunks)
+@@ -1506,7 +1506,7 @@ status_t StagefrightRecorder::setupCameraSource(
+         *cameraSource = CameraSource::CreateFromCamera(
+                 mCamera, mCameraProxy, mCameraId, mClientName, mClientUid,
+                 videoSize, mFrameRate,
+-                mPreviewSurface, true /*storeMetaDataInVideoBuffers*/);
++                mPreviewSurface, false /*storeMetaDataInVideoBuffers*/);
+     }
+     mCamera.clear();
+     mCameraProxy.clear();
