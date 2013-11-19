@@ -85,16 +85,14 @@ ifeq ($(BOARD_USES_QCOM_HARDWARE),true)
 endif
 
 ifeq ($(BUILD_WITH_AMLOGIC_PLAYER),true)
-AMPLAYER_APK_DIR=$(TOP)/device/ainol/elf2/packages/LibPlayer/
+AMPLAYER_APK_DIR=$(TOP)/device/jxd/s7300b/packages/LibPlayer/
 LOCAL_C_INCLUDES +=\
         $(AMPLAYER_APK_DIR)/amplayer/player/include     \
-        $(AMPLAYER_APK_DIR)/amplayer/control/include    \
         $(AMPLAYER_APK_DIR)/amadec/include      \
         $(AMPLAYER_APK_DIR)/amcodec/include     \
         $(AMPLAYER_APK_DIR)/amavutils/include     \
 	$(AMPLAYER_APK_DIR)/amvdec/include           \
-        $(AMPLAYER_APK_DIR)/amffmpeg/ \
-	$(TOP)/device/ainol/elf2/include
+        $(AMPLAYER_APK_DIR)/amffmpeg/
 
 LOCAL_SHARED_LIBRARIES += libui
 LOCAL_SHARED_LIBRARIES +=libamplayer libamavutils libamvdec

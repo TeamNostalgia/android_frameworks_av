@@ -880,6 +880,34 @@ status_t AmlogicPlayer::GetFileType(char **typestr,int *videos,int *audios)
 	return NO_ERROR;
 }
 
+int AmlogicPlayer::ammodule_match_check(const char *filefmtstr,const char *fmtsetting)
+{
+        const char * psets=fmtsetting;
+        const char *psetend;
+        int psetlen=0;
+        char codecstr[64]="";
+		if(filefmtstr==NULL || fmtsetting==NULL)
+			return 0;
+
+        while(psets && psets[0]!='\0'){
+                psetlen=0;
+                psetend=strchr(psets,',');
+                if(psetend!=NULL && psetend>psets && psetend-psets<64){
+                        psetlen=psetend-psets;
+                        memcpy(codecstr,psets,psetlen);
+                        codecstr[psetlen]='\0';
+                        psets=&psetend[1];//skip ";"
+                }else{
+                        strcpy(codecstr,psets);
+                        psets=NULL;
+                }
+                if(strlen(codecstr)>0){
+                        if(strstr(filefmtstr,codecstr)!=NULL)
+                                return 1;
+                }
+        }
+        return 0;
+}
 int AmlogicPlayer::isUseExternalModule(const char* mod_name){
     int ret = -1;
     const char* ex_mod = "media.libplayer.modules";
@@ -2038,7 +2066,7 @@ status_t    AmlogicPlayer::setParameter(int key, const Parcel &request)
 				mNeedResetOnResume=true;
 			 }
 			 break;
-		case KEY_PARAMETER_AML_PLAYER_FREERUN_MODE:
+		/*case KEY_PARAMETER_AML_PLAYER_FREERUN_MODE:
 			 if(mPlayer_id>=0){
 				int delay = 0;
 				const String16 uri16 = request.readString16();
@@ -2051,7 +2079,7 @@ status_t    AmlogicPlayer::setParameter(int key, const Parcel &request)
 				cmd.param = delay;
 				player_send_message(mPlayer_id,&cmd);
 			 }
-			 break;
+			 break;*/
 		case KEY_PARAMETER_AML_PLAYER_ENABLE_OSDVIDEO:
 			 {
 				const String16 uri16 = request.readString16();

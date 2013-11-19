@@ -136,7 +136,8 @@ private:
 	//helper functions
 	const char* getStrAudioCodec(int atype);
 	const char* getStrVideoCodec(int vtype);
-    int isUseExternalModule(const char* mod_name);
+    	int isUseExternalModule(const char* mod_name);
+    	int ammodule_match_check(const char* allmodstr, const char * modstr);
 	static int 			vp_open(URLContext *h, const char *filename, int flags);
 	static int 			vp_read(URLContext *h, unsigned char *buf, int size);
 	static int 			vp_write(URLContext *h, unsigned char *buf, int size);
